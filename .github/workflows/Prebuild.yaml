@@ -1,0 +1,51 @@
+name: Pre-Build Components
+
+# The image holds no code, only the base and the dev command, so only a change to it builds a new one. Every new build
+# of a tag moves the deployments on that tag to it, and staging and production build their commit again. A pushed git
+# tag always builds (GitHub does not filter tags by path). "Run workflow" builds by hand, after the base's v1 moved
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/Prebuild.yaml
+  workflow_dispatch:
+
+env:
+  REGISTRY: public.ecr.aws
+  PROJECT: p8t2q7f4/alixea/${{ github.event.repository.name }}
+
+jobs:
+  run-builds:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: TanStack Start
+            folder: .
+            type: main-dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::300197899440:role/AlixeaPrebuildPushForGithubActions
+          aws-region: us-east-1
+      - name: Login to Amazon ECR Public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+      - name: Alixea build
+        uses: alixea-erp/action-build@v1.0
+        with: ${{ matrix }}
+        env:
+          project: ${{ env.PROJECT }}
+          registry: ${{ env.REGISTRY }}
